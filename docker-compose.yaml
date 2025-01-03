@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  # Сервис для Spring Boot приложения
+  backend:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://host.docker.internal:5432/taskDB  # Локальная база данных
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}       # Используем переменные окружения
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}       # Используем переменные окружения
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}                               # Секретный ключ для JWT
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL}                                 # Email для отправки сообщений
+      APP_PASSWORD: ${APP_PASSWORD}                                   # Пароль для почты
+    env_file:
+      - .env  # Подключаем .env файл с секретами

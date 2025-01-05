@@ -1,6 +1,7 @@
 package com.vectoredu.backend.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.security.core.GrantedAuthority;
@@ -15,14 +16,21 @@ import java.util.List;
 @Getter
 @Setter
 public class User implements UserDetails {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     @Column(unique = true, nullable = false)
+    @NotBlank
     private String username;
+
     @Column(unique = true, nullable = false)
+    @NotBlank
     private String email;
+
     @Column(nullable = false)
+    @NotBlank
     private String password;
 
     @Column(name = "verification_code")

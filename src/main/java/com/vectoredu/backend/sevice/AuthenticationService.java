@@ -5,8 +5,10 @@ import com.vectoredu.backend.dto.request.RegisterUserDto;
 import com.vectoredu.backend.dto.request.VerifyUserDto;
 import com.vectoredu.backend.model.User;
 import com.vectoredu.backend.repository.UserRepository;
+import com.vectoredu.backend.util.exception.*;
+import com.vectoredu.backend.util.validators.EmailValidator;
+import com.vectoredu.backend.util.validators.PasswordValidator;
 import jakarta.mail.MessagingException;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,20 +25,44 @@ public class AuthenticationService {
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
 
-    public AuthenticationService(
-            UserRepository userRepository,
-            AuthenticationManager authenticationManager,
-            PasswordEncoder passwordEncoder,
-            EmailService emailService
-    ) {
-        this.authenticationManager = authenticationManager;
+    private final EmailValidator emailValidator;
+    private final PasswordValidator passwordValidator;
+
+    public AuthenticationService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, EmailService emailService, EmailValidator emailValidator, PasswordValidator passwordValidator) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.authenticationManager = authenticationManager;
         this.emailService = emailService;
+        this.emailValidator = emailValidator;
+        this.passwordValidator = passwordValidator;
     }
 
     public User signup(RegisterUserDto input) {
-        User user = new User(input.getUsername(), input.getEmail(), passwordEncoder.encode(input.getPassword()));
+
+        if (!emailValidator.isValid(input.getEmail(), null)) {
+            throw new InvalidEmailException("Неверный формат email");
+        }
+
+        // Валидация password
+        if (!passwordValidator.isValid(input.getPassword(),null)) {
+            throw new InvalidPasswordException("Пароль должен содержать хотя бы одну заглавную букву, одну цифру и быть не короче 8 символов");
+        }
+
+        Optional<User> userEmail = userRepository.findByEmail(input.getEmail());
+        Optional<User> userName = userRepository.findByUsername(input.getUsername());
+
+        // Проверка уникальности email и username
+        if (userName.isPresent()) {
+            throw new UsernameOrEmailAlreadyExistsException("Пользователь с таким именем уже зарегистрирован");
+        }
+        if (userEmail.isPresent()) {
+            throw new UsernameOrEmailAlreadyExistsException("Пользователь с таким адресом уже зарегистрирован");
+        }
+
+        // Шифрование пароля
+        String encodedPassword = passwordEncoder.encode(input.getPassword());
+
+        User user = new User(input.getUsername(), input.getEmail(), encodedPassword);
         user.setVerificationCode(generateVerificationCode());
         user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
         user.setEnabled(false);
@@ -46,10 +72,10 @@ public class AuthenticationService {
 
     public User authenticate(LoginUserDto input) {
         User user = userRepository.findByEmail(input.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException("Пользователь не найден"));
 
         if (!user.isEnabled()) {
-            throw new RuntimeException("Account not verified. Please verify your account.");
+            throw new UserVerifiedException("Пользователь не верифицирован");
         }
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -66,7 +92,7 @@ public class AuthenticationService {
         if (optionalUser.isPresent()) {
             User user = optionalUser.get();
             if (user.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
-                throw new RuntimeException("Verification code has expired");
+                throw new VerificationCodeExpiredException("Время действия кода истекло");
             }
             if (user.getVerificationCode().equals(input.getVerificationCode())) {
                 user.setEnabled(true);
@@ -74,10 +100,10 @@ public class AuthenticationService {
                 user.setVerificationCodeExpiresAt(null);
                 userRepository.save(user);
             } else {
-                throw new RuntimeException("Invalid verification code");
+                throw new InvalidVerificationCodeException("Неверный код подтверждения");
             }
         } else {
-            throw new RuntimeException("User not found");
+            throw new UserNotFoundException("Пользователь не найден");
         }
     }
 
@@ -86,14 +112,14 @@ public class AuthenticationService {
         if (optionalUser.isPresent()) {
             User user = optionalUser.get();
             if (user.isEnabled()) {
-                throw new RuntimeException("Account is already verified");
+                throw new UserVerifiedException("Account is already verified");
             }
             user.setVerificationCode(generateVerificationCode());
             user.setVerificationCodeExpiresAt(LocalDateTime.now().plusHours(1));
             sendVerificationEmail(user);
             userRepository.save(user);
         } else {
-            throw new RuntimeException("User not found");
+            throw new UserNotFoundException("Пользователь не найден");
         }
     }
 

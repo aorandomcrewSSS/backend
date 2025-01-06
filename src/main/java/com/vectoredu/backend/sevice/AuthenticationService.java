@@ -34,6 +34,7 @@ public class AuthenticationService {
 
 
     public User signup(RegisterUserDto input) {
+
         if (!emailValidator.isValid(input.getEmail(), null)) {
             throw new ValidationException("Не верный формат email");
         }
@@ -42,23 +43,24 @@ public class AuthenticationService {
             throw new ValidationException("Пароль должен содержать хотя бы одну заглавную букву, одну цифру, быть не короче 8 и не длиннее 20 символов");
         }
 
-        Optional<User> userEmail = userRepository.findByEmail(input.getEmail());
-        Optional<User> userName = userRepository.findByUsername(input.getUsername());
+        Optional<User> user = userRepository.findByEmailOrUsername(input.getEmail(), input.getUsername());
 
-        if (userName.isPresent()) {
-            throw new KnownUseCaseException("Такое имя пользователя уже зарегистрировано");
-        }
-        if (userEmail.isPresent()) {
-            throw new KnownUseCaseException("Такая почта уже зарегистрирована");
+        if (user.isPresent()) {
+            if (user.get().getEmail().equals(input.getEmail())) {
+                throw new KnownUseCaseException("Такая почта уже зарегистрирована");
+            }
+            if (user.get().getUsername().equals(input.getUsername())) {
+                throw new KnownUseCaseException("Такое имя пользователя уже зарегистрировано");
+            }
         }
 
         String encodedPassword = passwordEncoder.encode(input.getPassword());
-        User user = new User(input.getUsername(), input.getEmail(), encodedPassword);
-        user.setVerificationCode(generateVerificationCode());
-        user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
-        user.setEnabled(false);
-        sendVerificationEmail(user);
-        return userRepository.save(user);
+        User userToCreate = new User(input.getUsername(), input.getEmail(), encodedPassword);
+        userToCreate.setVerificationCode(generateVerificationCode());
+        userToCreate.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
+        userToCreate.setEnabled(false);
+        sendVerificationEmail(userToCreate);
+        return userRepository.save(userToCreate);
     }
 
     public User authenticate(LoginUserDto input) {
@@ -134,6 +136,7 @@ public class AuthenticationService {
             log.info("ошибка отправки кода верификации");
         }
     }
+
     private String generateVerificationCode() {
         Random random = new Random();
         int code = random.nextInt(900000) + 100000;

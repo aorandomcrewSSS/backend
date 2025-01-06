@@ -1,10 +1,10 @@
 package com.vectoredu.backend.dto.request;
 
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
+import lombok.experimental.Accessors;
 
-@Getter
-@Setter
+@Data
+@Accessors(chain=true)
 public class VerifyUserDto {
     private String email;
     private String verificationCode;

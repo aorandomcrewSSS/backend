@@ -9,6 +9,8 @@ import com.vectoredu.backend.util.exception.*;
 import com.vectoredu.backend.util.validators.EmailValidator;
 import com.vectoredu.backend.util.validators.PasswordValidator;
 import jakarta.mail.MessagingException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,7 +20,9 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Random;
 
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class AuthenticationService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -28,40 +32,27 @@ public class AuthenticationService {
     private final EmailValidator emailValidator;
     private final PasswordValidator passwordValidator;
 
-    public AuthenticationService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, EmailService emailService, EmailValidator emailValidator, PasswordValidator passwordValidator) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.authenticationManager = authenticationManager;
-        this.emailService = emailService;
-        this.emailValidator = emailValidator;
-        this.passwordValidator = passwordValidator;
-    }
 
     public User signup(RegisterUserDto input) {
-
         if (!emailValidator.isValid(input.getEmail(), null)) {
-            throw new InvalidEmailException("Неверный формат email");
+            throw new ValidationException("Не верный формат email");
         }
 
-        // Валидация password
-        if (!passwordValidator.isValid(input.getPassword(),null)) {
-            throw new InvalidPasswordException("Пароль должен содержать хотя бы одну заглавную букву, одну цифру и быть не короче 8 символов");
+        if (!passwordValidator.isValid(input.getPassword(), null)) {
+            throw new ValidationException("Пароль должен содержать хотя бы одну заглавную букву, одну цифру, быть не короче 8 и не длиннее 20 символов");
         }
 
         Optional<User> userEmail = userRepository.findByEmail(input.getEmail());
         Optional<User> userName = userRepository.findByUsername(input.getUsername());
 
-        // Проверка уникальности email и username
         if (userName.isPresent()) {
-            throw new UsernameOrEmailAlreadyExistsException("Пользователь с таким именем уже зарегистрирован");
+            throw new KnownUseCaseException("Такое имя пользователя уже зарегистрировано");
         }
         if (userEmail.isPresent()) {
-            throw new UsernameOrEmailAlreadyExistsException("Пользователь с таким адресом уже зарегистрирован");
+            throw new KnownUseCaseException("Такая почта уже зарегистрирована");
         }
 
-        // Шифрование пароля
         String encodedPassword = passwordEncoder.encode(input.getPassword());
-
         User user = new User(input.getUsername(), input.getEmail(), encodedPassword);
         user.setVerificationCode(generateVerificationCode());
         user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
@@ -72,16 +63,14 @@ public class AuthenticationService {
 
     public User authenticate(LoginUserDto input) {
         User user = userRepository.findByEmail(input.getEmail())
-                .orElseThrow(() -> new UserNotFoundException("Пользователь не найден"));
+                .orElseThrow(() -> new UserException("Пользователь не найден"));
 
         if (!user.isEnabled()) {
-            throw new UserVerifiedException("Пользователь не верифицирован");
+            throw new VerificationException("Пользователь не верифицирован");
         }
+
         authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        input.getEmail(),
-                        input.getPassword()
-                )
+                new UsernamePasswordAuthenticationToken(input.getEmail(), input.getPassword())
         );
 
         return user;
@@ -92,7 +81,7 @@ public class AuthenticationService {
         if (optionalUser.isPresent()) {
             User user = optionalUser.get();
             if (user.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
-                throw new VerificationCodeExpiredException("Время действия кода истекло");
+                throw new ValidationException("Время подтверждения истекло");
             }
             if (user.getVerificationCode().equals(input.getVerificationCode())) {
                 user.setEnabled(true);
@@ -100,10 +89,10 @@ public class AuthenticationService {
                 user.setVerificationCodeExpiresAt(null);
                 userRepository.save(user);
             } else {
-                throw new InvalidVerificationCodeException("Неверный код подтверждения");
+                throw new ValidationException("Неверный код подтверждения");
             }
         } else {
-            throw new UserNotFoundException("Пользователь не найден");
+            throw new UserException("Пользователь не найден");
         }
     }
 
@@ -112,14 +101,14 @@ public class AuthenticationService {
         if (optionalUser.isPresent()) {
             User user = optionalUser.get();
             if (user.isEnabled()) {
-                throw new UserVerifiedException("Account is already verified");
+                throw new KnownUseCaseException("Аккаунт уже подтвержден");
             }
             user.setVerificationCode(generateVerificationCode());
             user.setVerificationCodeExpiresAt(LocalDateTime.now().plusHours(1));
             sendVerificationEmail(user);
             userRepository.save(user);
         } else {
-            throw new UserNotFoundException("Пользователь не найден");
+            throw new UserException("Пользователь не найден");
         }
     }
 
@@ -142,8 +131,7 @@ public class AuthenticationService {
         try {
             emailService.sendVerificationEmail(user.getEmail(), subject, htmlMessage);
         } catch (MessagingException e) {
-            // Handle email sending exception
-            e.printStackTrace();
+            log.info("ошибка отправки кода верификации");
         }
     }
     private String generateVerificationCode() {

@@ -3,11 +3,11 @@ package com.vectoredu.backend.dto.request;
 import com.vectoredu.backend.util.validators.ValidEmail;
 import com.vectoredu.backend.util.validators.ValidPassword;
 import jakarta.validation.constraints.NotBlank;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
+import lombok.experimental.Accessors;
 
-@Getter
-@Setter
+@Data
+@Accessors(chain=true)
 public class RegisterUserDto {
 
     @ValidEmail

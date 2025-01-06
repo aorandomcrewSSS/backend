@@ -16,11 +16,8 @@ public class PasswordValidator implements ConstraintValidator<ValidPassword, Str
     public boolean isValid(String value, ConstraintValidatorContext context) {
         if (value == null) return false;
 
-        boolean validLength = value.length() >= 8;
-        boolean hasUppercase = value.matches(".*[A-Z].*");
-        boolean hasDigit = value.matches(".*[0-9].*");
+        String regex = "^(?=.*[A-Z])(?=.*[0-9]).{8,20}$";
 
-        // Если какой-либо из условий не выполнен, возвращаем false
-        return validLength && hasUppercase && hasDigit;
+        return value.matches(regex);
     }
 }

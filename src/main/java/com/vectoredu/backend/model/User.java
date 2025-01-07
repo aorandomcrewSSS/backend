@@ -2,8 +2,7 @@ package com.vectoredu.backend.model;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
@@ -13,8 +12,11 @@ import java.util.List;
 
 @Entity
 @Table(name = "users")
+@Builder
 @Getter
 @Setter
+@AllArgsConstructor
+@NoArgsConstructor
 public class User implements UserDetails {
 
     @Id
@@ -46,9 +48,6 @@ public class User implements UserDetails {
         this.username = username;
         this.email = email;
         this.password = password;
-    }
-    //default constructor
-    public User(){
     }
 
     @Override

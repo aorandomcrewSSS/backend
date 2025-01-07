@@ -1,4 +1,4 @@
-package com.vectoredu.backend.sevice;
+package com.vectoredu.backend.service;
 
 import com.vectoredu.backend.model.User;
 import com.vectoredu.backend.repository.UserRepository;

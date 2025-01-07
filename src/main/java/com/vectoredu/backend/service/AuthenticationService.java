@@ -1,4 +1,4 @@
-package com.vectoredu.backend.sevice;
+package com.vectoredu.backend.service;
 
 import com.vectoredu.backend.dto.request.LoginUserDto;
 import com.vectoredu.backend.dto.request.RegisterUserDto;
@@ -9,6 +9,7 @@ import com.vectoredu.backend.util.exception.*;
 import com.vectoredu.backend.util.validators.EmailValidator;
 import com.vectoredu.backend.util.validators.PasswordValidator;
 import jakarta.mail.MessagingException;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -22,6 +23,7 @@ import java.util.Random;
 
 @Slf4j
 @Service
+@Transactional
 @RequiredArgsConstructor
 public class AuthenticationService {
     private final UserRepository userRepository;
@@ -32,19 +34,44 @@ public class AuthenticationService {
     private final EmailValidator emailValidator;
     private final PasswordValidator passwordValidator;
 
-
     public User signup(RegisterUserDto input) {
+        validateSignupInput(input);
+        checkUserExistence(input);
+        User userToCreate = createUser(input);
+        return userRepository.save(userToCreate);
+    }
 
+    public User authenticate(LoginUserDto input) {
+        User user = findUserByEmail(input.getEmail());
+        checkUserEnabled(user);
+        authenticateUser(input);
+        return user;
+    }
+
+    public void verifyUser(VerifyUserDto input) {
+        User user = findUserByEmail(input.getEmail());
+        validateVerificationCode(user, input);
+        enableUser(user);
+    }
+
+    public void resendVerificationCode(String email) {
+        User user = findUserByEmail(email);
+        checkUserAlreadyVerified(user);
+        updateUserVerificationCode(user);
+        sendVerificationEmail(user);
+    }
+
+    private void validateSignupInput(RegisterUserDto input) {
         if (!emailValidator.isValid(input.getEmail(), null)) {
             throw new ValidationException("Не верный формат email");
         }
-
         if (!passwordValidator.isValid(input.getPassword(), null)) {
             throw new ValidationException("Пароль должен содержать хотя бы одну заглавную букву, одну цифру, быть не короче 8 и не длиннее 20 символов");
         }
+    }
 
+    private void checkUserExistence(RegisterUserDto input) {
         Optional<User> user = userRepository.findByEmailOrUsername(input.getEmail(), input.getUsername());
-
         if (user.isPresent()) {
             if (user.get().getEmail().equals(input.getEmail())) {
                 throw new KnownUseCaseException("Такая почта уже зарегистрирована");
@@ -53,71 +80,78 @@ public class AuthenticationService {
                 throw new KnownUseCaseException("Такое имя пользователя уже зарегистрировано");
             }
         }
-
-        String encodedPassword = passwordEncoder.encode(input.getPassword());
-        User userToCreate = new User(input.getUsername(), input.getEmail(), encodedPassword);
-        userToCreate.setVerificationCode(generateVerificationCode());
-        userToCreate.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
-        userToCreate.setEnabled(false);
-        sendVerificationEmail(userToCreate);
-        return userRepository.save(userToCreate);
     }
 
-    public User authenticate(LoginUserDto input) {
-        User user = userRepository.findByEmail(input.getEmail())
-                .orElseThrow(() -> new UserException("Пользователь не найден"));
+    private User createUser(RegisterUserDto input) {
+        String encodedPassword = passwordEncoder.encode(input.getPassword());
+        return User.builder()
+                .username(input.getUsername())
+                .email(input.getEmail())
+                .password(encodedPassword)
+                .verificationCode(generateVerificationCode())
+                .verificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15))
+                .enabled(false)
+                .build();
+    }
 
+    private User findUserByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserException("Пользователь не найден"));
+    }
+
+    private void checkUserEnabled(User user) {
         if (!user.isEnabled()) {
             throw new VerificationException("Пользователь не верифицирован");
         }
+    }
 
+    private void authenticateUser(LoginUserDto input) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(input.getEmail(), input.getPassword())
         );
-
-        return user;
     }
 
-    public void verifyUser(VerifyUserDto input) {
-        Optional<User> optionalUser = userRepository.findByEmail(input.getEmail());
-        if (optionalUser.isPresent()) {
-            User user = optionalUser.get();
-            if (user.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
-                throw new ValidationException("Время подтверждения истекло");
-            }
-            if (user.getVerificationCode().equals(input.getVerificationCode())) {
-                user.setEnabled(true);
-                user.setVerificationCode(null);
-                user.setVerificationCodeExpiresAt(null);
-                userRepository.save(user);
-            } else {
-                throw new ValidationException("Неверный код подтверждения");
-            }
-        } else {
-            throw new UserException("Пользователь не найден");
+    private void validateVerificationCode(User user, VerifyUserDto input) {
+        if (user.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ValidationException("Время подтверждения истекло");
+        }
+        if (!user.getVerificationCode().equals(input.getVerificationCode())) {
+            throw new ValidationException("Неверный код подтверждения");
         }
     }
 
-    public void resendVerificationCode(String email) {
-        Optional<User> optionalUser = userRepository.findByEmail(email);
-        if (optionalUser.isPresent()) {
-            User user = optionalUser.get();
-            if (user.isEnabled()) {
-                throw new KnownUseCaseException("Аккаунт уже подтвержден");
-            }
-            user.setVerificationCode(generateVerificationCode());
-            user.setVerificationCodeExpiresAt(LocalDateTime.now().plusHours(1));
-            sendVerificationEmail(user);
-            userRepository.save(user);
-        } else {
-            throw new UserException("Пользователь не найден");
+    private void enableUser(User user) {
+        user.setEnabled(true);
+        user.setVerificationCode(null);
+        user.setVerificationCodeExpiresAt(null);
+        userRepository.save(user);
+    }
+
+    private void checkUserAlreadyVerified(User user) {
+        if (user.isEnabled()) {
+            throw new KnownUseCaseException("Аккаунт уже подтвержден");
         }
     }
 
-    private void sendVerificationEmail(User user) { //TODO: Update with company logo
+    private void updateUserVerificationCode(User user) {
+        user.setVerificationCode(generateVerificationCode());
+        user.setVerificationCodeExpiresAt(LocalDateTime.now().plusHours(1));
+        userRepository.save(user);
+    }
+
+    private void sendVerificationEmail(User user) {
         String subject = "Account Verification";
         String verificationCode = "VERIFICATION CODE " + user.getVerificationCode();
-        String htmlMessage = "<html>"
+        String htmlMessage = generateVerificationEmailContent(verificationCode);
+        try {
+            emailService.sendVerificationEmail(user.getEmail(), subject, htmlMessage);
+        } catch (MessagingException e) {
+            log.info("ошибка отправки кода верификации");
+        }
+    }
+
+    private String generateVerificationEmailContent(String verificationCode) {
+        return "<html>"
                 + "<body style=\"font-family: Arial, sans-serif;\">"
                 + "<div style=\"background-color: #f5f5f5; padding: 20px;\">"
                 + "<h2 style=\"color: #333;\">Welcome to our app!</h2>"
@@ -129,12 +163,6 @@ public class AuthenticationService {
                 + "</div>"
                 + "</body>"
                 + "</html>";
-
-        try {
-            emailService.sendVerificationEmail(user.getEmail(), subject, htmlMessage);
-        } catch (MessagingException e) {
-            log.info("ошибка отправки кода верификации");
-        }
     }
 
     private String generateVerificationCode() {

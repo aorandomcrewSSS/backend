@@ -4,20 +4,19 @@ import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import org.springframework.stereotype.Component;
 
+import java.util.regex.Pattern;
+
 @Component
 public class PasswordValidator implements ConstraintValidator<ValidPassword, String> {
 
+    private static final String PASSWORD_PATTERN = "^(?=.*[A-Z])(?=.*[0-9]).{8,20}$";
+
     @Override
     public void initialize(ValidPassword constraintAnnotation) {
-        // Инициализация, если требуется (в данном случае не требуется)
     }
 
     @Override
     public boolean isValid(String value, ConstraintValidatorContext context) {
-        if (value == null) return false;
-
-        String regex = "^(?=.*[A-Z])(?=.*[0-9]).{8,20}$";
-
-        return value.matches(regex);
+        return value != null && Pattern.matches(PASSWORD_PATTERN, value);
     }
 }

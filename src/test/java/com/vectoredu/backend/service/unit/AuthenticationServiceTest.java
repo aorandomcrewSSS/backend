@@ -1,10 +1,12 @@
-package com.vectoredu.backend.service;
+package com.vectoredu.backend.service.unit;
 
 import com.vectoredu.backend.dto.request.LoginUserDto;
 import com.vectoredu.backend.dto.request.RegisterUserDto;
 import com.vectoredu.backend.dto.request.VerifyUserDto;
 import com.vectoredu.backend.model.User;
 import com.vectoredu.backend.repository.UserRepository;
+import com.vectoredu.backend.service.AuthenticationService;
+import com.vectoredu.backend.service.EmailService;
 import com.vectoredu.backend.util.exception.KnownUseCaseException;
 import com.vectoredu.backend.util.exception.UserException;
 import com.vectoredu.backend.util.exception.ValidationException;

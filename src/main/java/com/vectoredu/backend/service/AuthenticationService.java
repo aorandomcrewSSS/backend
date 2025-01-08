@@ -165,7 +165,7 @@ public class AuthenticationService {
                 + "</html>";
     }
 
-    private String generateVerificationCode() {
+    public String generateVerificationCode() {
         Random random = new Random();
         int code = random.nextInt(900000) + 100000;
         return String.valueOf(code);

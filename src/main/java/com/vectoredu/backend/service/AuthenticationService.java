@@ -62,6 +62,10 @@ public class AuthenticationService {
     }
 
     private void validateSignupInput(RegisterUserDto input) {
+        if(input.getUsername().isBlank()){
+            throw new ValidationException("Имя пользователя не может быть пустым");
+        }
+
         if (!emailValidator.isValid(input.getEmail(), null)) {
             throw new ValidationException("Не верный формат email");
         }

@@ -39,12 +39,22 @@ public class AuthenticationController {
             @ApiResponse(responseCode = "200", description = "Пользователь успешно аутентифицирован"),
             @ApiResponse(responseCode = "401", description = "Неверные учетные данные")
     })
+    // Логика аутентификации и получения JWT токенов
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> authenticate(@RequestBody LoginUserDto loginUserDto){
-        User authenticatedUser = authenticationService.authenticate(loginUserDto);
-        String jwtToken = jwtService.generateToken(authenticatedUser);
-        LoginResponse loginResponse = new LoginResponse(jwtToken, jwtService.getExpirationTime());
+        LoginResponse loginResponse = authenticationService.authenticate(loginUserDto);
         return ResponseEntity.ok(loginResponse);
+    }
+
+    @Operation(summary = "Обновление access-токена", responses = {
+            @ApiResponse(responseCode = "200", description = "Токен успешно обновлен"),
+            @ApiResponse(responseCode = "401", description = "Ошибка валидации токена")
+    })
+    // Логика получения нового access токена по refresh токену
+    @PostMapping("/refresh")
+    public ResponseEntity<String> refreshAccessToken(@RequestParam String refreshToken){
+        String newAccessToken = authenticationService.refreshAccessToken(refreshToken);
+        return ResponseEntity.ok(newAccessToken);
     }
 
     @Operation(summary = "Подтверждение аккаунта пользователя", responses = {
@@ -73,5 +83,25 @@ public class AuthenticationController {
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
+    }
+
+    @Operation(summary = "Запрос на восстановление пароля", responses = {
+            @ApiResponse(responseCode = "200", description = "Ссылка для сброса пароля отправлена на вашу почту"),
+            @ApiResponse(responseCode = "400", description = "Неверные данные")
+    })
+    @PostMapping("/request-password-reset")
+    public ResponseEntity<String> requestPasswordReset(@RequestParam String email) {
+        authenticationService.requestPasswordReset(email);
+        return ResponseEntity.ok("Ссылка для сброса пароля отправлена на вашу почту");
+    }
+
+    @Operation(summary = "форма для восстановление пароля", responses = {
+            @ApiResponse(responseCode = "200", description = "пароль успешно изменен"),
+            @ApiResponse(responseCode = "400", description = "Неверные данные")
+    })
+    @PatchMapping("/reset-password")
+    public ResponseEntity<String> resetPassword(@RequestParam String token, @RequestParam String newPassword) {
+        authenticationService.resetPassword(token, newPassword);
+        return ResponseEntity.ok("Пароль успешно изменен");
     }
 }

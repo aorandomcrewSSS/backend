@@ -63,12 +63,8 @@ public class AuthenticationController {
     })
     @PostMapping("/verify")
     public ResponseEntity<?> verifyUser(@RequestBody VerifyUserDto verifyUserDto) {
-        try {
-            authenticationService.verifyUser(verifyUserDto);
-            return ResponseEntity.ok("Аккаунт успешно подтвержден");
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        authenticationService.verifyUser(verifyUserDto);
+        return ResponseEntity.ok("Аккаунт успешно подтвержден");
     }
 
     @Operation(summary = "Повторная отправка кода для подтверждения аккаунта", responses = {
@@ -77,12 +73,8 @@ public class AuthenticationController {
     })
     @PostMapping("/resend")
     public ResponseEntity<?> resendVerificationCode(@RequestParam String email) {
-        try {
-            authenticationService.resendVerificationCode(email);
-            return ResponseEntity.ok("Код для подтверждения отправлен");
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        authenticationService.resendVerificationCode(email);
+        return ResponseEntity.ok("Код для подтверждения отправлен");
     }
 
     @Operation(summary = "Запрос на восстановление пароля", responses = {

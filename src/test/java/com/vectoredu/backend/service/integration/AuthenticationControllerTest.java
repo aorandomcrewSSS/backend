@@ -10,6 +10,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 
+import java.time.LocalDateTime;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -26,8 +29,11 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
 
     @AfterEach
     public void clearDatabase() {
-        // Очистка всех записей в нужных таблицах
-        jdbcTemplate.execute("DELETE FROM users"); // Пример для очистки таблицы пользователей
+        // Сначала удаляем все записи в таблице reset_password
+        jdbcTemplate.execute("DELETE FROM reset_password");
+
+        // Затем удаляем записи из таблицы users
+        jdbcTemplate.execute("DELETE FROM users");
 
     }
 
@@ -97,4 +103,111 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").value("Код для подтверждения отправлен"));
     }
+
+    @Test
+    public void testRequestPasswordReset() throws Exception {
+        String email = "test@example.com";
+
+        jdbcTemplate.update("UPDATE users SET enabled = TRUE WHERE email = ?", email);
+
+        mockMvc.perform(post("/auth/request-password-reset")
+                        .param("email", email))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").value("Ссылка для сброса пароля отправлена на вашу почту"));
+    }
+
+    @Test
+    public void testResetPassword() throws Exception {
+        String email = "test@example.com";
+
+        String token = "dummy-token";
+
+        // Получаем user_id для пользователя с данным email
+        Integer userId = jdbcTemplate.queryForObject(
+                "SELECT id FROM users WHERE email = ?",
+                new Object[]{email},
+                Integer.class
+        );
+
+        LocalDateTime expirationDate = LocalDateTime.now().plusMinutes(5); // Например, срок действия токена 15 минут
+
+        jdbcTemplate.update("INSERT INTO reset_password (user_id, token, expiration_date) VALUES (?, ?, ?)",
+                userId, token, expirationDate);
+
+        String newPassword = "NewPassword123";
+
+        mockMvc.perform(patch("/auth/reset-password")
+                        .param("token", token)
+                        .param("newPassword", newPassword))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").value("Пароль успешно изменен"));
+    }
+
+    @Test
+    public void testRegisterUserWithInvalidEmail() throws Exception {
+        String json = "{\"email\":\"invalid-email\", \"password\":\"Password123\", \"username\":\"testuser2\"}";
+
+        mockMvc.perform(post("/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Не верный формат email"));
+    }
+
+    @Test
+    public void testLoginWithInvalidCredentials() throws Exception {
+        String json = "{\"email\":\"test@example.com\", \"password\":\"WrongPassword\"}";
+
+        String email = "test@example.com";
+
+        String message = "Неверные учетные данные";
+
+        jdbcTemplate.update("UPDATE users SET enabled = TRUE WHERE email = ?", email);
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Данные введены некорректно"));
+    }
+
+    @Test
+    public void testVerifyUserWithInvalidCode() throws Exception {
+        String email = "test@example.com";
+        String invalidVerificationCode = "000000";  // Неверный код
+
+        String json = String.format("{\"email\":\"%s\", \"verificationCode\":\"%s\"}", email, invalidVerificationCode);
+
+        mockMvc.perform(post("/auth/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Неверный код подтверждения"));
+    }
+
+    @Test
+    public void testResendVerificationCodeForVerifiedUser() throws Exception {
+        String email = "test@example.com";
+
+        // Сначала активируем пользователя
+        jdbcTemplate.update("UPDATE users SET enabled = TRUE WHERE email = ?", email);
+
+        mockMvc.perform(post("/auth/resend")
+                        .param("email", email))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Аккаунт уже подтвержден"));
+    }
+
+    @Test
+    public void testResetPasswordWithInvalidToken() throws Exception {
+        String invalidToken = "invalid-token";
+        String newPassword = "NewPassword123";
+
+        mockMvc.perform(patch("/auth/reset-password")
+                        .param("token", invalidToken)
+                        .param("newPassword", newPassword))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Неверный или истекший токен для восстановления пароля"));
+    }
+
 }

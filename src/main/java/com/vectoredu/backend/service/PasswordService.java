@@ -58,7 +58,7 @@ public class PasswordService {
         passwordResetTokenRepository.deleteByToken(token);
     }
 
-    private void validateNewPassword(String newPassword) {
+    public void validateNewPassword(String newPassword) {
         if (!passwordValidator.isValid(newPassword, null)) {
             throw new ValidationException("Пароль должен содержать хотя бы одну заглавную букву, одну цифру, быть не короче 8 и не длиннее 20 символов");
         }
@@ -91,7 +91,7 @@ public class PasswordService {
         return UUID.randomUUID().toString();
     }
 
-    private void sendPasswordResetEmail(User user, String resetLink) {
+    public void sendPasswordResetEmail(User user, String resetLink) {
         String subject = "Сброс пароля";
         String htmlMessage = generatePasswordResetEmailContent(resetLink);
         sendEmail(user, subject, htmlMessage);

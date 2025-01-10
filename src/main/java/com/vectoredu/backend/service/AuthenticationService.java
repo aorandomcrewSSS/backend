@@ -14,6 +14,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -49,7 +50,11 @@ public class AuthenticationService {
     public LoginResponse authenticate(LoginUserDto input) {
         User user = findUserByEmail(input.getEmail());
         checkUserEnabled(user);
-        authenticateUser(input);
+        try {
+            authenticateUser(input);
+        } catch (BadCredentialsException e) {
+            throw new UnauthorizedException("Данные введены некорректно");
+        }
 
         String jwtToken = generateJwtToken(user);
         String refreshToken = generateRefreshToken(user);
@@ -59,8 +64,8 @@ public class AuthenticationService {
 
     // Обновление токена доступа
     public String refreshAccessToken(String refreshToken) {
-        String email = jwtService.extractUsername(refreshToken);
-        User user = findUserByEmail(email);
+        String username = jwtService.extractUsername(refreshToken);
+        User user = findUserByUsername(username);
         validateRefreshToken(refreshToken, user);
         return jwtService.generateToken(user);
     }
@@ -139,6 +144,11 @@ public class AuthenticationService {
                 .orElseThrow(() -> new UserException("Пользователь не найден"));
     }
 
+    private User findUserByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new UserException("Пользователь не найден"));
+    }
+
     private void checkUserEnabled(User user) {
         if (!user.isEnabled()) {
             throw new VerificationException("Пользователь не верифицирован");
@@ -170,12 +180,14 @@ public class AuthenticationService {
     }
 
     private void validateVerificationCode(User user, VerifyUserDto input) {
+
         if (user.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
             throw new ValidationException("Время подтверждения истекло");
         }
         if (!user.getVerificationCode().equals(input.getVerificationCode())) {
             throw new ValidationException("Неверный код подтверждения");
         }
+
     }
 
     private void enableUser(User user) {

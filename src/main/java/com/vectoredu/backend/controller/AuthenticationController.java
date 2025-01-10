@@ -1,6 +1,7 @@
 package com.vectoredu.backend.controller;
 
 import com.vectoredu.backend.dto.request.LoginUserDto;
+import com.vectoredu.backend.dto.request.RefreshToken;
 import com.vectoredu.backend.dto.request.RegisterUserDto;
 import com.vectoredu.backend.dto.request.VerifyUserDto;
 import com.vectoredu.backend.dto.response.LoginResponse;
@@ -52,8 +53,8 @@ public class AuthenticationController {
     })
     // Логика получения нового access токена по refresh токену
     @PostMapping("/refresh")
-    public ResponseEntity<String> refreshAccessToken(@RequestParam String refreshToken){
-        String newAccessToken = authenticationService.refreshAccessToken(refreshToken);
+    public ResponseEntity<String> refreshAccessToken(@RequestBody RefreshToken refreshToken){
+        String newAccessToken = authenticationService.refreshAccessToken(refreshToken.getToken());
         return ResponseEntity.ok(newAccessToken);
     }
 

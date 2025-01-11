@@ -13,7 +13,10 @@ import lombok.experimental.Accessors;
 public class RegisterUserDto {
 
     @NotBlank()
-    private String username;
+    private String firstName;
+
+    @NotBlank()
+    private String lastName;
 
     @ValidEmail
     private String email;

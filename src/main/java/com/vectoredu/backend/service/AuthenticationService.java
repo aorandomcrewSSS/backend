@@ -64,8 +64,8 @@ public class AuthenticationService {
 
     // Обновление токена доступа
     public String refreshAccessToken(String refreshToken) {
-        String username = jwtService.extractUsername(refreshToken);
-        User user = findUserByUsername(username);
+        String email = jwtService.extractUsername(refreshToken);
+        User user = findUserByEmail(email);
         validateRefreshToken(refreshToken, user);
         return jwtService.generateToken(user);
     }
@@ -97,9 +97,14 @@ public class AuthenticationService {
 
     // Валидация ввода при регистрации
     private void validateSignupInput(RegisterUserDto input) {
-        if(input.getUsername().isBlank()){
-            throw new ValidationException("Имя пользователя не может быть пустым");
+        if(input.getFirstName().isBlank()){
+            throw new ValidationException("Поле с именем не может быть пустым");
         }
+
+        if(input.getLastName().isBlank()){
+            throw new ValidationException("Поле с фамилией не может быть пустым");
+        }
+
         if (!emailValidator.isValid(input.getEmail(), null)) {
             throw new ValidationException("Не верный формат email");
         }
@@ -110,23 +115,21 @@ public class AuthenticationService {
 
     // Проверка существования пользователя
     private void checkUserExistence(RegisterUserDto input) {
-        Optional<User> user = userRepository.findByEmailOrUsername(input.getEmail(), input.getUsername());
+        Optional<User> user = userRepository.findByEmail(input.getEmail());
         user.ifPresent(value -> handleExistingUser(value, input));
     }
 
     private void handleExistingUser(User existingUser, RegisterUserDto input) {
         if (existingUser.getEmail().equals(input.getEmail())) {
-            throw new KnownUseCaseException("Такая почта уже зарегистрирована");
-        }
-        if (existingUser.getUsername().equals(input.getUsername())) {
-            throw new KnownUseCaseException("Такое имя пользователя уже зарегистрировано");
+            throw new KnownUseCaseException("Пользователь с такой почтой уже зарегистрирован");
         }
     }
 
     private User createUser(RegisterUserDto input) {
         String encodedPassword = passwordEncoder.encode(input.getPassword());
         return User.builder()
-                .username(input.getUsername())
+                .firstName(input.getFirstName())
+                .lastName(input.getLastName())
                 .email(input.getEmail())
                 .password(encodedPassword)
                 .verificationCode(generateVerificationCode())
@@ -141,11 +144,6 @@ public class AuthenticationService {
 
     private User findUserByEmail(String email) {
         return userRepository.findByEmail(email)
-                .orElseThrow(() -> new UserException("Пользователь не найден"));
-    }
-
-    private User findUserByUsername(String username) {
-        return userRepository.findByUsername(username)
                 .orElseThrow(() -> new UserException("Пользователь не найден"));
     }
 

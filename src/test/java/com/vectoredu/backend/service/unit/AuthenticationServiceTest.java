@@ -7,12 +7,14 @@ import com.vectoredu.backend.model.User;
 import com.vectoredu.backend.repository.UserRepository;
 import com.vectoredu.backend.service.AuthenticationService;
 import com.vectoredu.backend.service.EmailService;
+import com.vectoredu.backend.service.PasswordService;
 import com.vectoredu.backend.util.exception.KnownUseCaseException;
 import com.vectoredu.backend.util.exception.UserException;
 import com.vectoredu.backend.util.exception.ValidationException;
 import com.vectoredu.backend.util.exception.VerificationException;
 import com.vectoredu.backend.util.validators.EmailValidator;
 import com.vectoredu.backend.util.validators.PasswordValidator;
+import jakarta.mail.MessagingException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -47,6 +49,9 @@ class AuthenticationServiceTest {
     @Mock
     private PasswordValidator passwordValidator;
 
+    @Mock
+    private PasswordService passwordService;
+
     @InjectMocks
     private AuthenticationService authenticationService;
 
@@ -57,7 +62,7 @@ class AuthenticationServiceTest {
 
     @Test
     void signup_ShouldThrowValidationException_WhenEmailIsInvalid() {
-        RegisterUserDto input = new RegisterUserDto("invalidemail", "username", "Password1");
+        RegisterUserDto input = new RegisterUserDto("invalidemail", "Test", "User", "Password1");
 
         when(emailValidator.isValid(input.getEmail(), null)).thenReturn(false);
 
@@ -68,7 +73,7 @@ class AuthenticationServiceTest {
 
     @Test
     void signup_ShouldThrowValidationException_WhenPasswordIsInvalid() {
-        RegisterUserDto input = new RegisterUserDto("email@example.com", "username", "pass");
+        RegisterUserDto input = new RegisterUserDto("email@example.com", "Test", "User", "pass");
 
         when(emailValidator.isValid(input.getEmail(), null)).thenReturn(true);
         when(passwordValidator.isValid(input.getPassword(), null)).thenReturn(false);
@@ -80,13 +85,13 @@ class AuthenticationServiceTest {
 
     @Test
     void signup_ShouldThrowKnownUseCaseException_WhenEmailAlreadyExists() {
-        RegisterUserDto input = new RegisterUserDto("email@example.com", "username", "Password1");
+        RegisterUserDto input = new RegisterUserDto("email@example.com", "Test", "User", "Password1");
         User existingUser = new User();
         existingUser.setEmail(input.getEmail());
 
         when(emailValidator.isValid(input.getEmail(), null)).thenReturn(true);
         when(passwordValidator.isValid(input.getPassword(), null)).thenReturn(true);
-        when(userRepository.findByEmailOrUsername(input.getEmail(), input.getUsername())).thenReturn(Optional.of(existingUser));
+        when(userRepository.findByEmail(input.getEmail())).thenReturn(Optional.of(existingUser));
 
         assertThrows(KnownUseCaseException.class, () -> authenticationService.signup(input));
 
@@ -95,23 +100,28 @@ class AuthenticationServiceTest {
 
     @Test
     void signup_ShouldSaveUser_WhenInputIsValid() {
-        RegisterUserDto input = new RegisterUserDto("email@example.com", "username", "Password1");
+        RegisterUserDto input = new RegisterUserDto("email@example.com", "Test", "User", "Password1");
         User userToSave = User.builder()
+                .firstName(input.getFirstName())
+                .lastName(input.getLastName())
                 .email(input.getEmail())
-                .username(input.getUsername())
                 .password("encodedPassword")
+                .verificationCode("123456")
+                .verificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15))
+                .enabled(false)
                 .build();
 
         when(emailValidator.isValid(input.getEmail(), null)).thenReturn(true);
         when(passwordValidator.isValid(input.getPassword(), null)).thenReturn(true);
-        when(userRepository.findByEmailOrUsername(input.getEmail(), input.getUsername())).thenReturn(Optional.empty());
+        when(userRepository.findByEmail(input.getEmail())).thenReturn(Optional.empty());
         when(passwordEncoder.encode(input.getPassword())).thenReturn("encodedPassword");
         when(userRepository.save(any(User.class))).thenReturn(userToSave);
 
         User savedUser = authenticationService.signup(input);
 
         assertEquals(input.getEmail(), savedUser.getEmail());
-        assertEquals(input.getUsername(), savedUser.getUsername());
+        assertEquals(input.getFirstName(), savedUser.getFirstName());
+        assertEquals(input.getLastName(), savedUser.getLastName());
         assertEquals("encodedPassword", savedUser.getPassword());
         verify(userRepository).save(any(User.class));
     }
@@ -163,5 +173,21 @@ class AuthenticationServiceTest {
         when(userRepository.findByEmail(input.getEmail())).thenReturn(Optional.of(user));
 
         assertThrows(ValidationException.class, () -> authenticationService.verifyUser(input));
+    }
+
+    @Test
+    void resendVerificationCode_ShouldSendNewCode_WhenUserIsNotVerified() throws MessagingException {
+        String email = "email@example.com";
+        User user = new User();
+        user.setEmail(email);
+        user.setEnabled(false);
+
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+        when(userRepository.save(any(User.class))).thenReturn(user);
+
+        authenticationService.resendVerificationCode(email);
+
+        verify(userRepository).save(any(User.class));
+        verify(emailService).sendVerificationEmail(any(), any(), any());
     }
 }

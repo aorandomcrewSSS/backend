@@ -40,7 +40,8 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
             {
                 "email": "test@example.com", 
                 "password": "Password123", 
-                "username": "testuser"
+                "firstName": "Test", 
+                "lastName": "User"
             }
         """;
 
@@ -49,7 +50,8 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
                         .content(json))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("test@example.com"))
-                .andExpect(jsonPath("$.username").value("testuser"));
+                .andExpect(jsonPath("$.firstName").value("Test"))
+                .andExpect(jsonPath("$.lastName").value("User"));
     }
 
     @Test
@@ -58,7 +60,8 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
             {
                 "email": "test1@example.com", 
                 "password": "Password123", 
-                "username": "testuser1"
+                "firstName": "Test", 
+                "lastName": "User1"
             }
         """;
 
@@ -67,7 +70,8 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
                         .content(json))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("test1@example.com"))
-                .andExpect(jsonPath("$.username").value("testuser1"));
+                .andExpect(jsonPath("$.firstName").value("Test"))
+                .andExpect(jsonPath("$.lastName").value("User1"));
     }
 
     @Test
@@ -246,7 +250,8 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
             {
                 "email": "invalid-email", 
                 "password": "Password123", 
-                "username": "testuser2"
+                "firstName": "Test", 
+                "lastName": "User"
             }
         """;
 

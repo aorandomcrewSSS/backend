@@ -12,12 +12,13 @@ import lombok.experimental.Accessors;
 @AllArgsConstructor
 public class RegisterUserDto {
 
+    @NotBlank()
+    private String username;
+
     @ValidEmail
     private String email;
 
     @ValidPassword
     private String password;
 
-    @NotBlank(message = "имя пользователя не может быть пустым")
-    private String username;
 }

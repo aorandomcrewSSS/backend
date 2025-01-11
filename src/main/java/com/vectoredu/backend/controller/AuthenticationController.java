@@ -1,6 +1,7 @@
 package com.vectoredu.backend.controller;
 
 import com.vectoredu.backend.dto.request.LoginUserDto;
+import com.vectoredu.backend.dto.request.RefreshToken;
 import com.vectoredu.backend.dto.request.RegisterUserDto;
 import com.vectoredu.backend.dto.request.VerifyUserDto;
 import com.vectoredu.backend.dto.response.LoginResponse;
@@ -39,12 +40,22 @@ public class AuthenticationController {
             @ApiResponse(responseCode = "200", description = "Пользователь успешно аутентифицирован"),
             @ApiResponse(responseCode = "401", description = "Неверные учетные данные")
     })
+    // Логика аутентификации и получения JWT токенов
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> authenticate(@RequestBody LoginUserDto loginUserDto){
-        User authenticatedUser = authenticationService.authenticate(loginUserDto);
-        String jwtToken = jwtService.generateToken(authenticatedUser);
-        LoginResponse loginResponse = new LoginResponse(jwtToken, jwtService.getExpirationTime());
+        LoginResponse loginResponse = authenticationService.authenticate(loginUserDto);
         return ResponseEntity.ok(loginResponse);
+    }
+
+    @Operation(summary = "Обновление access-токена", responses = {
+            @ApiResponse(responseCode = "200", description = "Токен успешно обновлен"),
+            @ApiResponse(responseCode = "401", description = "Ошибка валидации токена")
+    })
+    // Логика получения нового access токена по refresh токену
+    @PostMapping("/refresh")
+    public ResponseEntity<String> refreshAccessToken(@RequestBody RefreshToken refreshToken){
+        String newAccessToken = authenticationService.refreshAccessToken(refreshToken.getToken());
+        return ResponseEntity.ok(newAccessToken);
     }
 
     @Operation(summary = "Подтверждение аккаунта пользователя", responses = {
@@ -53,12 +64,8 @@ public class AuthenticationController {
     })
     @PostMapping("/verify")
     public ResponseEntity<?> verifyUser(@RequestBody VerifyUserDto verifyUserDto) {
-        try {
-            authenticationService.verifyUser(verifyUserDto);
-            return ResponseEntity.ok("Аккаунт успешно подтвержден");
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        authenticationService.verifyUser(verifyUserDto);
+        return ResponseEntity.ok("Аккаунт успешно подтвержден");
     }
 
     @Operation(summary = "Повторная отправка кода для подтверждения аккаунта", responses = {
@@ -67,11 +74,27 @@ public class AuthenticationController {
     })
     @PostMapping("/resend")
     public ResponseEntity<?> resendVerificationCode(@RequestParam String email) {
-        try {
-            authenticationService.resendVerificationCode(email);
-            return ResponseEntity.ok("Код для подтверждения отправлен");
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        authenticationService.resendVerificationCode(email);
+        return ResponseEntity.ok("Код для подтверждения отправлен");
+    }
+
+    @Operation(summary = "Запрос на восстановление пароля", responses = {
+            @ApiResponse(responseCode = "200", description = "Ссылка для сброса пароля отправлена на вашу почту"),
+            @ApiResponse(responseCode = "400", description = "Неверные данные")
+    })
+    @PostMapping("/request-password-reset")
+    public ResponseEntity<String> requestPasswordReset(@RequestParam String email) {
+        authenticationService.requestPasswordReset(email);
+        return ResponseEntity.ok("Ссылка для сброса пароля отправлена на вашу почту");
+    }
+
+    @Operation(summary = "форма для восстановление пароля", responses = {
+            @ApiResponse(responseCode = "200", description = "пароль успешно изменен"),
+            @ApiResponse(responseCode = "400", description = "Неверные данные")
+    })
+    @PatchMapping("/reset-password")
+    public ResponseEntity<String> resetPassword(@RequestParam String token, @RequestParam String newPassword) {
+        authenticationService.resetPassword(token, newPassword);
+        return ResponseEntity.ok("Пароль успешно изменен");
     }
 }

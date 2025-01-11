@@ -3,6 +3,7 @@ package com.vectoredu.backend.service;
 import com.vectoredu.backend.dto.request.LoginUserDto;
 import com.vectoredu.backend.dto.request.RegisterUserDto;
 import com.vectoredu.backend.dto.request.VerifyUserDto;
+import com.vectoredu.backend.dto.response.LoginResponse;
 import com.vectoredu.backend.model.User;
 import com.vectoredu.backend.repository.UserRepository;
 import com.vectoredu.backend.util.exception.*;
@@ -13,6 +14,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -30,30 +32,52 @@ public class AuthenticationService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
-
+    private final JwtService jwtService;
     private final EmailValidator emailValidator;
     private final PasswordValidator passwordValidator;
+    private final PasswordService passwordService;  // Сервис для работы с паролем
 
+    // Регистрация пользователя
     public User signup(RegisterUserDto input) {
         validateSignupInput(input);
         checkUserExistence(input);
         User userToCreate = createUser(input);
-        return userRepository.save(userToCreate);
+        sendVerificationEmail(userToCreate);
+        return saveUser(userToCreate);
     }
 
-    public User authenticate(LoginUserDto input) {
+    // Аутентификация пользователя
+    public LoginResponse authenticate(LoginUserDto input) {
         User user = findUserByEmail(input.getEmail());
         checkUserEnabled(user);
-        authenticateUser(input);
-        return user;
+        try {
+            authenticateUser(input);
+        } catch (BadCredentialsException e) {
+            throw new UnauthorizedException("Данные введены некорректно");
+        }
+
+        String jwtToken = generateJwtToken(user);
+        String refreshToken = generateRefreshToken(user);
+
+        return createLoginResponse(jwtToken, refreshToken);
     }
 
+    // Обновление токена доступа
+    public String refreshAccessToken(String refreshToken) {
+        String username = jwtService.extractUsername(refreshToken);
+        User user = findUserByUsername(username);
+        validateRefreshToken(refreshToken, user);
+        return jwtService.generateToken(user);
+    }
+
+    // Верификация пользователя
     public void verifyUser(VerifyUserDto input) {
         User user = findUserByEmail(input.getEmail());
         validateVerificationCode(user, input);
         enableUser(user);
     }
 
+    // Повторная отправка кода подтверждения
     public void resendVerificationCode(String email) {
         User user = findUserByEmail(email);
         checkUserAlreadyVerified(user);
@@ -61,11 +85,21 @@ public class AuthenticationService {
         sendVerificationEmail(user);
     }
 
+    // Метод для запроса сброса пароля
+    public void requestPasswordReset(String email) {
+        passwordService.requestPasswordReset(email);
+    }
+
+    // Метод для сброса пароля
+    public void resetPassword(String token, String newPassword) {
+        passwordService.resetPassword(token, newPassword);
+    }
+
+    // Валидация ввода при регистрации
     private void validateSignupInput(RegisterUserDto input) {
         if(input.getUsername().isBlank()){
             throw new ValidationException("Имя пользователя не может быть пустым");
         }
-
         if (!emailValidator.isValid(input.getEmail(), null)) {
             throw new ValidationException("Не верный формат email");
         }
@@ -74,15 +108,18 @@ public class AuthenticationService {
         }
     }
 
+    // Проверка существования пользователя
     private void checkUserExistence(RegisterUserDto input) {
         Optional<User> user = userRepository.findByEmailOrUsername(input.getEmail(), input.getUsername());
-        if (user.isPresent()) {
-            if (user.get().getEmail().equals(input.getEmail())) {
-                throw new KnownUseCaseException("Такая почта уже зарегистрирована");
-            }
-            if (user.get().getUsername().equals(input.getUsername())) {
-                throw new KnownUseCaseException("Такое имя пользователя уже зарегистрировано");
-            }
+        user.ifPresent(value -> handleExistingUser(value, input));
+    }
+
+    private void handleExistingUser(User existingUser, RegisterUserDto input) {
+        if (existingUser.getEmail().equals(input.getEmail())) {
+            throw new KnownUseCaseException("Такая почта уже зарегистрирована");
+        }
+        if (existingUser.getUsername().equals(input.getUsername())) {
+            throw new KnownUseCaseException("Такое имя пользователя уже зарегистрировано");
         }
     }
 
@@ -98,8 +135,17 @@ public class AuthenticationService {
                 .build();
     }
 
+    private User saveUser(User userToCreate) {
+        return userRepository.save(userToCreate);
+    }
+
     private User findUserByEmail(String email) {
         return userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserException("Пользователь не найден"));
+    }
+
+    private User findUserByUsername(String username) {
+        return userRepository.findByUsername(username)
                 .orElseThrow(() -> new UserException("Пользователь не найден"));
     }
 
@@ -115,13 +161,33 @@ public class AuthenticationService {
         );
     }
 
+    private String generateJwtToken(User user) {
+        return jwtService.generateToken(user);
+    }
+
+    private String generateRefreshToken(User user) {
+        return jwtService.generateRefreshToken(user);
+    }
+
+    private LoginResponse createLoginResponse(String jwtToken, String refreshToken) {
+        return new LoginResponse(jwtToken, jwtService.getExpirationTime(), refreshToken, jwtService.getRefreshExpirationTime());
+    }
+
+    private void validateRefreshToken(String refreshToken, User user) {
+        if (!jwtService.isRefreshTokenValid(refreshToken, user)) {
+            throw new UnauthorizedException("Invalid refresh token");
+        }
+    }
+
     private void validateVerificationCode(User user, VerifyUserDto input) {
+
         if (user.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
             throw new ValidationException("Время подтверждения истекло");
         }
         if (!user.getVerificationCode().equals(input.getVerificationCode())) {
             throw new ValidationException("Неверный код подтверждения");
         }
+
     }
 
     private void enableUser(User user) {
@@ -147,10 +213,14 @@ public class AuthenticationService {
         String subject = "Account Verification";
         String verificationCode = "VERIFICATION CODE " + user.getVerificationCode();
         String htmlMessage = generateVerificationEmailContent(verificationCode);
+        sendEmail(user, subject, htmlMessage);
+    }
+
+    private void sendEmail(User user, String subject, String htmlMessage) {
         try {
             emailService.sendVerificationEmail(user.getEmail(), subject, htmlMessage);
         } catch (MessagingException e) {
-            log.info("ошибка отправки кода верификации");
+            log.error("Ошибка при отправке email", e);
         }
     }
 

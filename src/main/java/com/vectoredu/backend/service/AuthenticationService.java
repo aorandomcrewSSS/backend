@@ -10,7 +10,6 @@ import com.vectoredu.backend.util.exception.*;
 import com.vectoredu.backend.util.validators.EmailValidator;
 import com.vectoredu.backend.util.validators.PasswordValidator;
 import jakarta.mail.MessagingException;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -18,6 +17,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -115,8 +115,16 @@ public class AuthenticationService {
 
     // Проверка существования пользователя
     private void checkUserExistence(RegisterUserDto input) {
-        Optional<User> user = userRepository.findByEmail(input.getEmail());
-        user.ifPresent(value -> handleExistingUser(value, input));
+        Optional<User> userOptional = userRepository.findByEmail(input.getEmail());
+        userOptional.ifPresent(existingUser -> {
+            if (!existingUser.isEnabled()) {
+                // Удаление существующего не верифицированного пользователя
+                userRepository.delete(existingUser);
+                userRepository.flush();
+            } else {
+                throw new KnownUseCaseException("Пользователь с такой почтой уже зарегистрирован");
+            }
+        });
     }
 
     private void handleExistingUser(User existingUser, RegisterUserDto input) {
@@ -203,7 +211,7 @@ public class AuthenticationService {
 
     private void updateUserVerificationCode(User user) {
         user.setVerificationCode(generateVerificationCode());
-        user.setVerificationCodeExpiresAt(LocalDateTime.now().plusHours(1));
+        user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
         userRepository.save(user);
     }
 

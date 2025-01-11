@@ -15,5 +15,4 @@ public class LoginResponse {
 
     private String refreshToken;
     private Instant refreshExpiresIn;
-
 }

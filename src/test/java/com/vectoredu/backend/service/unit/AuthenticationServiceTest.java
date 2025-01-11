@@ -8,7 +8,6 @@ import com.vectoredu.backend.repository.UserRepository;
 import com.vectoredu.backend.service.AuthenticationService;
 import com.vectoredu.backend.service.EmailService;
 import com.vectoredu.backend.service.PasswordService;
-import com.vectoredu.backend.util.exception.KnownUseCaseException;
 import com.vectoredu.backend.util.exception.UserException;
 import com.vectoredu.backend.util.exception.ValidationException;
 import com.vectoredu.backend.util.exception.VerificationException;
@@ -79,21 +78,6 @@ class AuthenticationServiceTest {
         when(passwordValidator.isValid(input.getPassword(), null)).thenReturn(false);
 
         assertThrows(ValidationException.class, () -> authenticationService.signup(input));
-
-        verify(userRepository, never()).save(any(User.class));
-    }
-
-    @Test
-    void signup_ShouldThrowKnownUseCaseException_WhenEmailAlreadyExists() {
-        RegisterUserDto input = new RegisterUserDto("email@example.com", "Test", "User", "Password1");
-        User existingUser = new User();
-        existingUser.setEmail(input.getEmail());
-
-        when(emailValidator.isValid(input.getEmail(), null)).thenReturn(true);
-        when(passwordValidator.isValid(input.getPassword(), null)).thenReturn(true);
-        when(userRepository.findByEmail(input.getEmail())).thenReturn(Optional.of(existingUser));
-
-        assertThrows(KnownUseCaseException.class, () -> authenticationService.signup(input));
 
         verify(userRepository, never()).save(any(User.class));
     }

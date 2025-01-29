@@ -1,6 +1,6 @@
 package com.vectoredu.backend.config;
 
-import com.vectoredu.backend.service.JwtService;
+import com.vectoredu.backend.service.authservice.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

@@ -2,6 +2,7 @@ package com.vectoredu.backend.service;
 
 import com.vectoredu.backend.model.User;
 import com.vectoredu.backend.repository.UserRepository;
+import com.vectoredu.backend.service.authservice.EmailService;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;

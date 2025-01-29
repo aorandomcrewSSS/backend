@@ -1,9 +1,10 @@
-package com.vectoredu.backend.service;
+package com.vectoredu.backend.service.authservice;
 
 import com.vectoredu.backend.dto.request.LoginUserDto;
 import com.vectoredu.backend.dto.request.RegisterUserDto;
 import com.vectoredu.backend.dto.request.VerifyUserDto;
 import com.vectoredu.backend.dto.response.LoginResponse;
+import com.vectoredu.backend.model.Role;
 import com.vectoredu.backend.model.User;
 import com.vectoredu.backend.repository.UserRepository;
 import com.vectoredu.backend.util.exception.*;
@@ -143,6 +144,7 @@ public class AuthenticationService {
                 .verificationCode(generateVerificationCode())
                 .verificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15))
                 .enabled(false)
+                .role(Role.ADMIN)
                 .build();
     }
 
@@ -152,7 +154,7 @@ public class AuthenticationService {
 
     private User findUserByEmail(String email) {
         return userRepository.findByEmail(email)
-                .orElseThrow(() -> new UserException("Пользователь не найден"));
+                .orElseThrow(() -> new NotFoundException("Пользователь не найден"));
     }
 
     private void checkUserEnabled(User user) {

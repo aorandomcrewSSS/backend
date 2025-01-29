@@ -5,10 +5,10 @@ import com.vectoredu.backend.dto.request.RegisterUserDto;
 import com.vectoredu.backend.dto.request.VerifyUserDto;
 import com.vectoredu.backend.model.User;
 import com.vectoredu.backend.repository.UserRepository;
-import com.vectoredu.backend.service.AuthenticationService;
-import com.vectoredu.backend.service.EmailService;
-import com.vectoredu.backend.service.PasswordService;
-import com.vectoredu.backend.util.exception.UserException;
+import com.vectoredu.backend.service.authservice.AuthenticationService;
+import com.vectoredu.backend.service.authservice.EmailService;
+import com.vectoredu.backend.service.authservice.PasswordService;
+import com.vectoredu.backend.util.exception.NotFoundException;
 import com.vectoredu.backend.util.exception.ValidationException;
 import com.vectoredu.backend.util.exception.VerificationException;
 import com.vectoredu.backend.util.validators.EmailValidator;
@@ -116,7 +116,7 @@ class AuthenticationServiceTest {
 
         when(userRepository.findByEmail(input.getEmail())).thenReturn(Optional.empty());
 
-        assertThrows(UserException.class, () -> authenticationService.authenticate(input));
+        assertThrows(NotFoundException.class, () -> authenticationService.authenticate(input));
     }
 
     @Test

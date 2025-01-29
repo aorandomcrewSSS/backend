@@ -1,4 +1,4 @@
-package com.vectoredu.backend.service;
+package com.vectoredu.backend.service.authservice;
 
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;

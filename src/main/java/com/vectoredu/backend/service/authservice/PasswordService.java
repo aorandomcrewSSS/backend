@@ -1,10 +1,10 @@
-package com.vectoredu.backend.service;
+package com.vectoredu.backend.service.authservice;
 
 import com.vectoredu.backend.model.PasswordResetToken;
 import com.vectoredu.backend.model.User;
 import com.vectoredu.backend.repository.PasswordResetTokenRepository;
 import com.vectoredu.backend.repository.UserRepository;
-import com.vectoredu.backend.util.exception.UserException;
+import com.vectoredu.backend.util.exception.NotFoundException;
 import com.vectoredu.backend.util.exception.ValidationException;
 import com.vectoredu.backend.util.validators.PasswordValidator;
 import jakarta.mail.MessagingException;
@@ -30,7 +30,7 @@ public class PasswordService {
 
     public void requestPasswordReset(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UserException("Пользователь не найден"));
+                .orElseThrow(() -> new NotFoundException("Пользователь не найден"));
 
         validateUserForPasswordReset(user);
 
@@ -83,7 +83,7 @@ public class PasswordService {
 
     private void validateUserForPasswordReset(User user) {
         if (user == null || !user.isEnabled()) {
-            throw new UserException("Пользователь не найден или не активен");
+            throw new NotFoundException("Пользователь не найден или не активен");
         }
     }
 

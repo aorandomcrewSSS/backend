@@ -1,4 +1,4 @@
-package com.vectoredu.backend.service;
+package com.vectoredu.backend.service.authservice;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
